@@ -1,18 +1,17 @@
 import requests
 import pandas as pd
-from api import api1, api2
-
+from api import api
 # Configuration
-API_KEY = api2 # Using the second API key
+API_KEY = api 
 BASE_URL = "https://api.rentcast.io/v1/properties"
-STATE = "TX"  # Fetching for Texas
+STATE = "XX"  # Fetching for State
 RECORDS_PER_REQUEST = 500  # Max records allowed per request
-MAX_REQUESTS = 49  # Limit per API restrictions (lost 1 request while testing again)
-CSV_FILE = "texas_property_data.csv"  # Output file
+MAX_REQUESTS = 50  # Limit per API restrictions
+CSV_FILE = "state_raw.csv"  # Output file
 
 def fetch_property_data(offset):
     """
-    Fetch property data for Texas with the specified offset using the API.
+    Fetch property data for state with the specified offset using the API.
     """
     headers = {
         "accept": "application/json",
@@ -45,7 +44,7 @@ def fetch_property_data(offset):
 
 def main():
     """
-    Main function to fetch property data for Texas and save to CSV.
+    Main function to fetch property data for state and save to CSV.
     """
     all_data = []
     print(f"Fetching data for state: {STATE}")
