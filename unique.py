@@ -1,3 +1,10 @@
+"""
+This script checks the data file for the total number of records and the number of unique entries 
+based on the 'id' column. It validates the file's existence, format, and contents before 
+processing. If valid, the script loads the CSV into a Pandas DataFrame, calculates unique IDs, 
+and outputs basic statistics and the list of column names for verification.
+"""
+
 import pandas as pd
 import sys
 
@@ -29,6 +36,8 @@ def main():
 
     print(f"Total number of records: {total_records}")
     print(f"Number of unique IDs: {unique_ids}")
+    print(data.columns.tolist()) # Verify columns in the data set
+
 
 if __name__ == "__main__":
     main()
