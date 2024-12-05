@@ -88,7 +88,7 @@ def main(in_directory, out_directory):
     df = df.na.fill(0, subset=["property_age","improvement_gap"])
 
     # Write the cleaned output
-    df.write.csv(out_directory, mode="overwrite", compression="gzip")
+    df.write.csv(out_directory, mode="overwrite", header=True, compression="gzip")
     print("Data cleaned and written to:", out_directory)
 
     spark.stop()
