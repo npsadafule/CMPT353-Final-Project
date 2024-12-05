@@ -2,6 +2,7 @@ import sys
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (StructType, StructField, StringType, FloatType, DoubleType)
 from pyspark.sql.functions import col, trim, when, mean as _mean
+from pyspark.ml.feature import Imputer
 
 def main(in_directory, out_directory):
     spark = SparkSession.builder.appName("Spark_Only_Cleaning").getOrCreate()
@@ -43,8 +44,7 @@ def main(in_directory, out_directory):
     # Read data
     df = spark.read.csv(in_directory, schema=schema, header=True, sep=";")
 
-    # Clean data
-    # Trim spaces and convert empty to null
+    # Trim spaces and convert empty strings to null
     string_cols = [f.name for f in df.schema.fields if isinstance(f.dataType, StringType)]
     for c in string_cols:
         df = df.withColumn(c, trim(col(c)))
@@ -53,39 +53,62 @@ def main(in_directory, out_directory):
     # Drop duplicates and rows without PID
     df = df.dropDuplicates().filter(col("PID").isNotNull())
 
-    # Convert YEAR_BUILT and BIG_IMPROVEMENT_YEAR to int
-    df = df.withColumn("YEAR_BUILT_INT", col("YEAR_BUILT").cast("int")) \
-           .withColumn("BIG_IMPROVEMENT_YEAR_INT", col("BIG_IMPROVEMENT_YEAR").cast("int")) \
-           .withColumn("REPORT_YEAR_INT", col("REPORT_YEAR").cast("int"))
+    # Drop rows where required fields are null
+    required_fields = [
+        "CURRENT_LAND_VALUE", 
+        "PREVIOUS_LAND_VALUE",
+        "CURRENT_IMPROVEMENT_VALUE",
+        "PREVIOUS_IMPROVEMENT_VALUE",
+        "TAX_LEVY",
+        "YEAR_BUILT", 
+        "BIG_IMPROVEMENT_YEAR",
+        "ZONING_DISTRICT", 
+        "ZONING_CLASSIFICATION",
+        "NEIGHBOURHOOD_CODE",
+        "TAX_ASSESSMENT_YEAR", 
+        "REPORT_YEAR"
+    ]
+    for field in required_fields:
+        df = df.filter(col(field).isNotNull())
 
-    # Impute numeric columns
-    numeric_cols = ["CURRENT_LAND_VALUE", "CURRENT_IMPROVEMENT_VALUE", 
-                    "PREVIOUS_LAND_VALUE", "PREVIOUS_IMPROVEMENT_VALUE", "TAX_LEVY"]
-    from pyspark.ml.feature import Imputer
-    imputer = Imputer(strategy="mean", inputCols=numeric_cols, outputCols=[c + "_imp" for c in numeric_cols])
+    # Convert YEAR_BUILT, BIG_IMPROVEMENT_YEAR, and REPORT_YEAR to integers
+    df = df.withColumn("YEAR_BUILT", col("YEAR_BUILT").cast("int")) \
+           .withColumn("BIG_IMPROVEMENT_YEAR", col("BIG_IMPROVEMENT_YEAR").cast("int")) \
+           .withColumn("REPORT_YEAR", col("REPORT_YEAR").cast("int"))
+
+    # Handle outliers in numeric fields using IQR
+    numeric_cols = ["CURRENT_LAND_VALUE", "PREVIOUS_LAND_VALUE"]
+    for field in numeric_cols:
+        q1, q3 = df.approxQuantile(field, [0.25, 0.75], 0.05)
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+
+        # Cap outliers to upper and lower bounds
+        df = df.withColumn(
+            field,
+            when(col(field) > upper_bound, upper_bound)
+            .when(col(field) < lower_bound, lower_bound)
+            .otherwise(col(field))
+        )
+
+    # Impute missing numeric columns with mean
+    impute_cols = ["CURRENT_IMPROVEMENT_VALUE", "PREVIOUS_IMPROVEMENT_VALUE", "TAX_LEVY"]
+    imputer = Imputer(strategy="mean", inputCols=impute_cols, outputCols=[c + "_imp" for c in impute_cols])
     df = imputer.fit(df).transform(df)
-    for c in numeric_cols:
+    for c in impute_cols:
         df = df.drop(c).withColumnRenamed(c + "_imp", c)
-
-    # Fill categorical columns with 'UNKNOWN'
-    cat_cols = ["LEGAL_TYPE", "ZONING_DISTRICT", "ZONING_CLASSIFICATION", "LOT", "PLAN", "BLOCK",
-                "DISTRICT_LOT", "FROM_CIVIC_NUMBER", "TO_CIVIC_NUMBER", "STREET_NAME", 
-                "PROPERTY_POSTAL_CODE", "NARRATIVE_LEGAL_LINE1", "NARRATIVE_LEGAL_LINE2",
-                "NARRATIVE_LEGAL_LINE3", "NARRATIVE_LEGAL_LINE4", "NARRATIVE_LEGAL_LINE5",
-                "NEIGHBOURHOOD_CODE", "TAX_ASSESSMENT_YEAR", "REPORT_YEAR", "YEAR_BUILT", "BIG_IMPROVEMENT_YEAR"]
-    for c in cat_cols:
-        df = df.na.fill("UNKNOWN", subset=[c])
 
     # Feature engineering: property_age, improvement_gap
     df = df.withColumn("property_age", 
-                       when(col("YEAR_BUILT_INT").isNotNull() & col("REPORT_YEAR_INT").isNotNull(),
-                            col("REPORT_YEAR_INT") - col("YEAR_BUILT_INT")).otherwise(None))
+                       when(col("YEAR_BUILT").isNotNull() & col("REPORT_YEAR").isNotNull(),
+                            col("REPORT_YEAR") - col("YEAR_BUILT")).otherwise(None))
     df = df.withColumn("improvement_gap",
-                       when(col("BIG_IMPROVEMENT_YEAR_INT").isNotNull() & col("YEAR_BUILT_INT").isNotNull(),
-                            col("BIG_IMPROVEMENT_YEAR_INT") - col("YEAR_BUILT_INT")).otherwise(None))
+                       when(col("BIG_IMPROVEMENT_YEAR").isNotNull() & col("YEAR_BUILT").isNotNull(),
+                            col("BIG_IMPROVEMENT_YEAR") - col("YEAR_BUILT")).otherwise(None))
 
     # Fill nulls in property_age and improvement_gap with 0 to avoid null issues later
-    df = df.na.fill(0, subset=["property_age","improvement_gap"])
+    df = df.na.fill(0, subset=["property_age", "improvement_gap"])
 
     # Write the cleaned output
     df.write.csv(out_directory, mode="overwrite", header=True, compression="gzip")
