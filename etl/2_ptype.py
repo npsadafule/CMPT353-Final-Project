@@ -37,9 +37,7 @@ filtered_data = data.filter(
     (col("property_type").isin(residential_types))
 )
 
-# Show a sample of the filtered data
 filtered_data.show(10)
 
-# Save the filtered and selected data to a new CSV
 output_path = "data_residential"
 filtered_data.write.csv(output_path, header=True, mode="overwrite", compression = "gzip")
