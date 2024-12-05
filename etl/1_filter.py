@@ -25,9 +25,7 @@ selected_data = enriched_data.select(
     col("sale_price"),
     col("property_type"),
     col("property_city"),
-    col("property_county"),
-    col("sale_year"),
-    col("sale_month"),    
+    col("property_county"),  
 )
 
 selected_data.show(10)
