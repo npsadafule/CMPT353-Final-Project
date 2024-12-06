@@ -79,6 +79,39 @@ def main(in_directory, out_directory):
     mae = evaluator.evaluate(predictions, {evaluator.metricName: "mae"})
     r2 = evaluator.evaluate(predictions, {evaluator.metricName: "r2"})
 
+    print(f"Root Mean Square Error (RMSE): {rmse}")
+    print(f"Mean Absolute Error (MAE): {mae}")
+    print(f"R² (Coefficient of Determination): {r2}")
+    print("Model coefficients:", lr_model.coefficients)
+    print("Model intercept:", lr_model.intercept)
+
+    actual_values = predictions.select("TAX_LEVY").rdd.flatMap(lambda x: x).collect()
+    predicted_values = predictions.select("prediction").rdd.flatMap(lambda x: x).collect()
+    residuals = [a - p for a, p in zip(actual_values, predicted_values)]
+
+    plt.figure(figsize=(10, 6))
+    plt.scatter(actual_values, predicted_values, alpha=0.6, label="Predicted Points")
+    plt.plot([0, max(actual_values)], [0, max(actual_values)], color="red", linestyle="--", label="Ideal Fit")
+    plt.title("Actual vs Predicted Tax Levy")
+    plt.xlabel("Actual Tax Levy")
+    plt.ylabel("Predicted Tax Levy")
+    plt.ylim(0, 10000)  # Limit y-axis to 10,000
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"{out_directory}/actual_vs_predicted.png")
+    plt.show()
+
+    plt.figure(figsize=(10, 6))
+    sns.histplot(residuals, kde=True, bins=30, color="blue", alpha=0.6)
+    plt.title("Residuals Distribution")
+    plt.xlabel("Residuals")
+    plt.ylabel("Frequency")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(f"{out_directory}/residuals_histogram.png")
+    plt.show()
+
 
     spark.stop()
 
