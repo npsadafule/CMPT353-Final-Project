@@ -34,6 +34,25 @@ def main(in_directory, out_directory):
 
     train_df = df.filter(col("TAX_LEVY") > 0).na.drop()
 
+    # encode categorical columns since ml models dont work with nums
+    categorical_cols = ["ZONING_DISTRICT", "NEIGHBOURHOOD_CODE"]
+    for col_name in categorical_cols:
+        # need to encode this cuz pyspark regress models dont like ints
+        indexer = StringIndexer(inputCol=col_name, outputCol=f"{col_name}_index")
+        train_df = indexer.fit(train_df).transform(train_df)
+
+    feature_cols = (
+        [f"log_{col_name}" for col_name in numerical_columns[:4]]  # log-transformed columns
+        + numerical_columns[4:]  # property_age
+        + [f"{col_name}_index" for col_name in categorical_cols]  # encoded categorical features
+    )
+
+    # assemble and scale some 
+    assembler = VectorAssembler(inputCols=feature_cols, outputCol="features_raw")
+    train_df = assembler.transform(train_df)
+    scaler = StandardScaler(inputCol="features_raw", outputCol="features", withStd=True, withMean=True)
+    train_df = scaler.fit(train_df).transform(train_df)
+
 
     spark.stop()
 
