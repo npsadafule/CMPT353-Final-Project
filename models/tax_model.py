@@ -53,6 +53,32 @@ def main(in_directory, out_directory):
     scaler = StandardScaler(inputCol="features_raw", outputCol="features", withStd=True, withMean=True)
     train_df = scaler.fit(train_df).transform(train_df)
 
+    ## model section ##
+
+    # train-test split
+    train_data, test_data = train_df.randomSplit([0.8, 0.2], seed=13)
+
+    # train Linear Regression model with L2 regularization
+    lr = LinearRegression(
+        featuresCol="features",
+        labelCol="TAX_LEVY",
+        predictionCol="prediction",
+        regParam=0.1,  # L2 regularization strength
+        elasticNetParam=0.0,  # Pure L2 regularization
+    )
+    lr_model = lr.fit(train_data)
+
+    # evaluating with predictions
+    predictions = lr_model.transform(test_data)
+    predictions.select("TAX_LEVY", "prediction", "features").show()
+    predictions.select("TAX_LEVY", "prediction").write.csv(out_directory, mode="overwrite", header=True)
+
+    # getting some data with models
+    evaluator = RegressionEvaluator(labelCol="TAX_LEVY", predictionCol="prediction")
+    rmse = evaluator.evaluate(predictions, {evaluator.metricName: "rmse"})
+    mae = evaluator.evaluate(predictions, {evaluator.metricName: "mae"})
+    r2 = evaluator.evaluate(predictions, {evaluator.metricName: "r2"})
+
 
     spark.stop()
 
