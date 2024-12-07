@@ -1,4 +1,4 @@
-# **CMPT353 Final Project**
+# **CMPT353 - Vancouver Property Analytics: A Data Science Approach**
 
 ## **Table of Contents**
 1. [Project Description](#project-description)
